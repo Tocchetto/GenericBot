@@ -1,0 +1,7 @@
+[package]
+name = "objeto"
+version = "0.1.0"
+
+[lib]
+name = "objeto"
+path = "objeto.rs"
