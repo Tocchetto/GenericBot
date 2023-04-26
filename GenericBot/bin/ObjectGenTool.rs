@@ -11,9 +11,18 @@ use winapi::um::wingdi::GetPixel;
 use winapi::shared::windef::POINT;
 use winapi::ctypes::c_int;
 use dialoguer::Input;
+use serde_yaml;
+use std::fs;
+use serde::Serialize;
 
 const VK_A: c_int = 0x41;
 const VK_ESCAPE: c_int = 0x1B;
+
+#[derive(Serialize)]
+pub struct Data {
+    color: String,
+    coordinates: [i32; 2],
+}
 
 fn main() {
     let hwnd = null_mut();
@@ -40,21 +49,25 @@ fn main() {
                 eprintln!("Error in GetMessageW");
                 break;
             }
-
+            
             if msg.message == WM_HOTKEY {
                 if msg.wParam == 1 {
                     if let Some((x, y)) = get_cursor_position() {
                         let color = get_pixel_color(x, y);
-                        let data = Data {
-                            position: (x, y),
-                            color,
-                        };
-                        let file_name: String = Input::new()
-                            .with_prompt("Digite o nome do objeto a ser criado")
-                            .interact()
-                            .unwrap();
-                        write_to_yaml(&format!("{}.yaml", file_name), &data);
-                        println!("Objeto '{file_name}' Criado com sucesso!");
+                        if let Some(color) = color {
+                            let data = Data {
+                                color: color_to_hex_string(color),
+                                coordinates: [x, y],
+                            };
+                            let file_name: String = Input::new()
+                                .with_prompt("Digite o nome do objeto a ser criado")
+                                .interact()
+                                .unwrap();
+                            write_to_yaml(&format!("{}.yaml", file_name), &data);
+                            println!("Objeto '{}' Criado com sucesso!", file_name);
+                        } else {
+                            println!("Failed to get pixel color");
+                        }
                     } else {
                         println!("Failed to get cursor position");
                     }
@@ -63,7 +76,7 @@ fn main() {
                 else if msg.wParam == 2 {
                     break;
                 }
-            }
+            }        
 
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
@@ -77,9 +90,14 @@ fn print_instructions(){
     println!("Para parar o script, pressione Alt+Esc");
 }
 
-fn write_to_yaml(file_name: &str, data: &Data) {
-    let serialized_data = serde_yaml::to_string(data).expect("Failed to serialize data");
-    std::fs::write(file_name, serialized_data).expect("Unable to write to file");
+pub fn write_to_yaml(file_name: &str, data: &Data) {
+    let yaml_string = serde_yaml::to_string(&data).expect("Erro ao serializar os dados");
+    fs::write(file_name, yaml_string).expect("Erro ao escrever os dados no arquivo");
+}
+
+pub fn color_to_hex_string(color: (u8, u8, u8)) -> String {
+    let (r, g, b) = color;
+    format!("#{:02X}{:02X}{:02X}", r, g, b)
 }
 
 pub fn get_cursor_position() -> Option<(i32, i32)> {
@@ -91,6 +109,7 @@ pub fn get_cursor_position() -> Option<(i32, i32)> {
         Some((point.x, point.y))
     }
 }
+
 
 pub fn get_pixel_color(x: i32, y: i32) -> Option<(u8, u8, u8)> {
     unsafe {
@@ -104,10 +123,4 @@ pub fn get_pixel_color(x: i32, y: i32) -> Option<(u8, u8, u8)> {
 
         Some((r, g, b))
     }
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-struct Data {
-    position: (i32, i32),
-    color: Option<(u8, u8, u8)>,
 }
